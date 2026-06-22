@@ -1,28 +1,40 @@
-async function enviarScript(scriptText){
-	const lines = scriptText.split(/[\n\t]+/).map(line => line.trim()).filter(line => line);
-	main = document.querySelector("#main"),
-	textarea = main.querySelector(`div[contenteditable="true"]`)
-	
-	if(!textarea) throw new Error("Não há uma conversa aberta")
-	
-	for(const line of lines){
-		console.log(line)
-	
-		textarea.focus();
-		document.execCommand('insertText', false, line);
-		textarea.dispatchEvent(new Event('change', {bubbles: true}));
-	
-		setTimeout(() => {
-			(main.querySelector(`[data-testid="send"]`) || main.querySelector(`[data-icon="send"]`)).click();
-		}, 100);
-		
-		if(lines.indexOf(line) !== lines.length - 1) await new Promise(resolve => setTimeout(resolve, 250));
-	}
-	
-	return lines.length;
+async function enviarScriptEmLinhas(fullText) {
+    // 1. Split the text into an array of lines
+    const lines = fullText.split('\n').filter(line => line.trim() !== "");
+    
+    // 2. Select the input box once
+    const inputBox = document.querySelector('div[contenteditable="true"][data-lexical-editor="true"]');
+    
+    if (!inputBox) {
+        console.error("Error: Could not find the message input box.");
+        return;
+    }
+
+    for (const line of lines) {
+        console.log(`Sending: ${line}`);
+        
+        // Focus and insert text
+        inputBox.focus();
+        document.execCommand('insertText', false, line);
+        
+        // Wait for the button to register the text
+        await new Promise(r => setTimeout(r, 500));
+        
+        // Find and click the button
+        const sendButton = document.querySelector('[data-testid="wds-ic-send-filled"]');
+        if (sendButton) {
+            const clickable = sendButton.closest('button') || sendButton.parentElement;
+            clickable.click();
+        }
+        
+        // IMPORTANT: Wait 1.5 seconds between messages so WhatsApp doesn't block you
+        await new Promise(r => setTimeout(r, 1500));
+    }
+    
+    console.log("Finished sending all lines!");
 }
 
-enviarScript(`
+enviarScriptEmLinhas(`
 
 
 	THE GODFATHER
