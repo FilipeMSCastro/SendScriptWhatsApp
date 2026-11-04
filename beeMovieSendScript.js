@@ -1,37 +1,68 @@
 async function enviarScriptEmLinhas(fullText) {
-    // 1. Split the text into an array of lines
-    const lines = fullText.split('\n').filter(line => line.trim() !== "");
-    
-    // 2. Select the input box once
-    const inputBox = document.querySelector('div[contenteditable="true"][data-lexical-editor="true"]');
-    
-    if (!inputBox) {
-        console.error("Error: Could not find the message input box.");
-        return;
+    // Type pararEnvio() in the console to stop after the current line
+    let parar = false;
+    window.pararEnvio = () => { parar = true; console.log("Stopping after the current line..."); };
+
+    const esperar = ms => new Promise(r => setTimeout(r, ms));
+
+    // 1. Split the text into an array of non-empty lines
+    const lines = fullText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+    // 2. The message box lives in the chat footer (the search box is also contenteditable)
+    const acharCaixa = () =>
+        document.querySelector('footer div[contenteditable="true"]') ||
+        document.querySelector('#main div[contenteditable="true"]');
+
+    // Send button fallback: known icons/labels, otherwise the last button in the footer
+    const acharBotao = () => {
+        const ic = document.querySelector('[data-icon*="send"],[data-testid*="send"],button[aria-label="Send"],button[aria-label="Enviar"]');
+        if (ic) return ic.closest('button') || ic.closest('[role="button"]') || ic.parentElement;
+        const bts = [...document.querySelectorAll('footer button, footer [role="button"]')];
+        return bts.length ? bts[bts.length - 1] : null;
+    };
+
+    const enter = c => {
+        for (const tipo of ['keydown', 'keypress', 'keyup'])
+            c.dispatchEvent(new KeyboardEvent(tipo, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+    };
+
+    const vazio = c => c.textContent.trim() === '';
+
+    if (!acharCaixa()) {
+        console.error("Error: Could not find the message input box. Open the chat first.");
+        return 0;
     }
 
-    for (const line of lines) {
-        console.log(`Sending: ${line}`);
-        
+    console.log(`${lines.length} lines to send. Type pararEnvio() to stop.`);
+
+    let enviadas = 0;
+    for (let i = 0; i < lines.length && !parar; i++) {
+        const caixa = acharCaixa();
+        if (!caixa) { console.error("Message box disappeared. Stopping."); break; }
+
         // Focus and insert text
-        inputBox.focus();
-        document.execCommand('insertText', false, line);
-        
-        // Wait for the button to register the text
-        await new Promise(r => setTimeout(r, 500));
-        
-        // Find and click the button
-        const sendButton = document.querySelector('[data-testid="wds-ic-send-filled"]');
-        if (sendButton) {
-            const clickable = sendButton.closest('button') || sendButton.parentElement;
-            clickable.click();
+        caixa.focus();
+        document.execCommand('insertText', false, lines[i]);
+        await esperar(600);
+
+        // Send with Enter; if the text is still there, click the send button
+        enter(caixa);
+        await esperar(400);
+        if (!vazio(caixa)) {
+            const b = acharBotao();
+            if (b) { b.click(); await esperar(400); }
         }
-        
+        if (!vazio(caixa)) { console.error(`Line ${i + 1} was not sent. Stopping.`); break; }
+
+        enviadas++;
+        console.log(`${i + 1}/${lines.length}: ${lines[i]}`);
+
         // IMPORTANT: Wait 1.5 seconds between messages so WhatsApp doesn't block you
-        await new Promise(r => setTimeout(r, 1500));
+        await esperar(1500);
     }
-    
-    console.log("Finished sending all lines!");
+
+    console.log(parar ? "Stopped." : "Finished sending all lines!");
+    return enviadas;
 }
 
 enviarScriptEmLinhas(`
